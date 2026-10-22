@@ -19,8 +19,8 @@ from srai._optional import import_optional_dependencies
 from srai.constants import REGIONS_INDEX
 from srai.embedders import CountEmbedder, ModelT
 from srai.embedders.s2vec.dataset import S2VecDataset
+from srai.embedders.s2vec.grid_utils import get_grid_patches
 from srai.embedders.s2vec.model import S2VecModel
-from srai.embedders.s2vec.s2_utils import get_patches_from_img_gdf
 from srai.exceptions import ModelNotFitException
 from srai.joiners.intersection_joiner import IntersectionJoiner
 from srai.loaders.osm_loaders.filters import GroupedOsmTagsFilter, OsmTagsFilter
@@ -40,10 +40,12 @@ class S2VecEmbedder(CountEmbedder):
     def __init__(
         self,
         target_features: Union[list[str], OsmTagsFilter, GroupedOsmTagsFilter],
+        crs: Union[str, int],
+        origin: tuple[float, float],
+        cell_size: float,
         count_subcategories: bool = True,
         batch_size: Optional[int] = 64,
-        img_res: int = 8,
-        patch_res: int = 12,
+        img_size: int = 16,
         num_heads: int = 8,
         encoder_layers: int = 6,
         decoder_layers: int = 2,
@@ -59,12 +61,15 @@ class S2VecEmbedder(CountEmbedder):
             target_features (Union[List[str], OsmTagsFilter, GroupedOsmTagsFilter]): The features
                 that are to be used in the embedding. Should be in "flat" format,
                 i.e. "<super-tag>_<sub-tag>", or use OsmTagsFilter object.
+            crs (Union[str, int]): Projected CRS the patch grid is defined in.
+            origin (tuple[float, float]): (x, y) of any grid point, in `crs` units.
+            cell_size (float): Patch side length, in `crs` units.
             count_subcategories (bool, optional): Whether to count all subcategories individually
                 or count features only on the highest level based on features column name.
                 Defaults to True.
             batch_size (int, optional): Batch size. Defaults to 64.
-            img_res (int, optional): Image resolution. Defaults to 8.
-            patch_res (int, optional): Patch resolution. Defaults to 12.
+            img_size (int, optional): Number of patches along each side of an image.
+                Defaults to 16.
             num_heads (int, optional): Number of heads in the transformer. Defaults to 8.
             encoder_layers (int, optional): Number of encoder layers in the transformer.
                 Defaults to 6.
@@ -89,9 +94,10 @@ class S2VecEmbedder(CountEmbedder):
 
         self._model: Optional[S2VecModel] = None
         self._is_fitted = False
-        self._img_res = img_res
-        self._patch_res = patch_res
-        self.img_size = 2 ** (patch_res - img_res)
+        self._crs = crs
+        self._origin = (origin[0], origin[1])
+        self._cell_size = cell_size
+        self.img_size = img_size
         self._num_heads = num_heads
         self._encoder_layers = encoder_layers
         self._decoder_layers = decoder_layers
@@ -113,7 +119,7 @@ class S2VecEmbedder(CountEmbedder):
         Create region embeddings.
 
         Args:
-            regions_gdf (gpd.GeoDataFrame): Region indexes and geometries.
+            regions_gdf (gpd.GeoDataFrame): Area to cover with the patch grid.
             features_gdf (gpd.GeoDataFrame): Feature indexes, geometries and feature values.
 
         Returns:
@@ -168,7 +174,7 @@ class S2VecEmbedder(CountEmbedder):
         Fit the model to the data.
 
         Args:
-            regions_gdf (gpd.GeoDataFrame): Region indexes and geometries.
+            regions_gdf (gpd.GeoDataFrame): Area to cover with the patch grid.
             features_gdf (gpd.GeoDataFrame): Feature indexes, geometries and feature values.
             learning_rate (float, optional): Learning rate. Defaults to 0.001.
             trainer_kwargs (Optional[Dict[str, Any]], optional): Trainer kwargs.
@@ -216,8 +222,12 @@ class S2VecEmbedder(CountEmbedder):
         shuffle: bool = True,
         is_fitting: bool = True,
     ) -> tuple[pd.DataFrame, DataLoader, S2VecDataset[T]]:
-        patches_gdf, img_patch_joint_gdf = get_patches_from_img_gdf(
-            img_gdf=regions_gdf, target_level=self._patch_res
+        patches_gdf, img_patch_joint_gdf = get_grid_patches(
+            area_gdf=regions_gdf,
+            crs=self._crs,
+            origin=self._origin,
+            cell_size=self._cell_size,
+            img_size=self.img_size,
         )
         joiner = IntersectionJoiner()
         patch_feature_joint_gdf = joiner.transform(patches_gdf, features_gdf)
@@ -251,7 +261,7 @@ class S2VecEmbedder(CountEmbedder):
         Fit the model to the data and create region embeddings.
 
         Args:
-            regions_gdf (gpd.GeoDataFrame): Region indexes and geometries.
+            regions_gdf (gpd.GeoDataFrame): Area to cover with the patch grid.
             features_gdf (gpd.GeoDataFrame): Feature indexes, geometries and feature values.
             learning_rate (float, optional): Learning rate. Defaults to 0.001.
             trainer_kwargs (Optional[Dict[str, Any]], optional): Trainer kwargs. This is where the
@@ -300,8 +310,10 @@ class S2VecEmbedder(CountEmbedder):
             ),
             "count_subcategories": self.count_subcategories,
             "batch_size": self._batch_size,
-            "img_res": self._img_res,
-            "patch_res": self._patch_res,
+            "crs": self._crs,
+            "origin": list(self._origin),
+            "cell_size": self._cell_size,
+            "img_size": self.img_size,
             "num_heads": self._num_heads,
             "encoder_layers": self._encoder_layers,
             "decoder_layers": self._decoder_layers,

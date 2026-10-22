@@ -14,8 +14,10 @@ PREDEFINED_TEST_CASES = [
                 "amenity",
             ]
         },
-        "img_res": 14,
-        "patch_res": 18,
+        "crs": "EPSG:32633",
+        "origin": (0, 0),
+        "cell_size": 40,
+        "img_size": 16,
         "num_heads": 2,
         "encoder_layers": 6,
         "decoder_layers": 2,

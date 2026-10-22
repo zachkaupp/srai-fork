@@ -21,7 +21,10 @@ from tests.embedders.s2vec.constants import PREDEFINED_TEST_CASES
 def test_embedder_not_fitted() -> None:
     """Test that S2VecEmbedder raises ModelNotFitException if not fitted."""
     embedder = S2VecEmbedder(
-        target_features=[f"{t}_{st}" for t in HEX2VEC_FILTER for st in HEX2VEC_FILTER[t]]  # type: ignore
+        target_features=[f"{t}_{st}" for t in HEX2VEC_FILTER for st in HEX2VEC_FILTER[t]],  # type: ignore
+        crs="EPSG:32633",
+        origin=(0, 0),
+        cell_size=40,
     )
     with pytest.raises(ModelNotFitException):
         embedder.transform(gpd.GeoDataFrame(geometry=[]), gpd.GeoDataFrame())
@@ -52,8 +55,10 @@ def test_embedder() -> None:
         embedder = S2VecEmbedder(
             target_features=target_features,
             batch_size=10,
-            img_res=test_case["img_res"],  # type: ignore
-            patch_res=test_case["patch_res"],  # type: ignore
+            crs=test_case["crs"],  # type: ignore
+            origin=test_case["origin"],  # type: ignore
+            cell_size=test_case["cell_size"],  # type: ignore
+            img_size=test_case["img_size"],  # type: ignore
             num_heads=test_case["num_heads"],  # type: ignore
             encoder_layers=test_case["encoder_layers"],  # type: ignore
             decoder_layers=test_case["decoder_layers"],  # type: ignore
@@ -101,8 +106,10 @@ def test_embedder_save_load() -> None:
         embedder = S2VecEmbedder(
             target_features=test_case["tags"],  # type: ignore
             batch_size=1,
-            img_res=test_case["img_res"],  # type: ignore
-            patch_res=test_case["patch_res"],  # type: ignore
+            crs=test_case["crs"],  # type: ignore
+            origin=test_case["origin"],  # type: ignore
+            cell_size=test_case["cell_size"],  # type: ignore
+            img_size=test_case["img_size"],  # type: ignore
             num_heads=test_case["num_heads"],  # type: ignore
             encoder_layers=test_case["encoder_layers"],  # type: ignore
             decoder_layers=test_case["decoder_layers"],  # type: ignore

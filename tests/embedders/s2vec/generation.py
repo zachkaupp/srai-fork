@@ -21,14 +21,17 @@ def generate_test_case(
     test_case_name: str,
     root_regions_tokens: list[str],
     seed: int,
-    img_res: int,
-    patch_res: int,
+    crs: str,
+    origin: tuple[float, float],
+    cell_size: float,
+    img_size: int,
     num_heads: int,
     encoder_layers: int,
     decoder_layers: int,
     embedding_dim: int,
     decoder_dim: int,
     mask_ratio: float,
+    dropout_prob: float,
     tags: Optional[OsmTagsFilter] = None,
 ) -> None:
     """Generate test case for S2VecEmbedder."""
@@ -52,14 +55,17 @@ def generate_test_case(
     embedder = S2VecEmbedder(
         target_features=[f"{st}_{t}" for st in tags for t in tags[st]],  # type: ignore
         batch_size=10,
-        img_res=img_res,
-        patch_res=patch_res,
+        crs=crs,
+        origin=origin,
+        cell_size=cell_size,
+        img_size=img_size,
         num_heads=num_heads,
         encoder_layers=encoder_layers,
         decoder_layers=decoder_layers,
         embedding_dim=embedding_dim,
         decoder_dim=decoder_dim,
         mask_ratio=mask_ratio,
+        dropout_prob=dropout_prob,
     )
 
     results_df = embedder.fit_transform(
