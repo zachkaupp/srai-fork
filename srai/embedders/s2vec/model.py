@@ -24,6 +24,11 @@ try:  # pragma: no cover
 except ImportError:
     from srai.embedders._pytorch_stubs import nn, torch
 
+# Learning rate schedule: linear warmup over this fraction of all training steps, then one cosine
+# decay down to this fraction of the peak learning rate at the last step.
+WARMUP_FRACTION = 0.05
+FINAL_LR_FRACTION = 0.01
+
 
 class MAEEncoder(nn.Module):  # type: ignore
     """Masked Autoencoder Encoder."""
@@ -390,6 +395,9 @@ class S2VecModel(Model):
         """
         Configure the optimizers. This is called by PyTorch Lightning.
 
+        The learning rate warms up linearly, then decays once along a cosine curve to the last
+        training step, so the schedule follows the length of the run (max_epochs).
+
         Returns:
             List[torch.optim.Optimizer]: The optimizers.
         """
@@ -400,12 +408,22 @@ class S2VecModel(Model):
             betas=(0.9, 0.95),
         )
 
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=100)
+        total_steps = int(self.trainer.estimated_stepping_batches)
+        warmup_steps = max(1, int(total_steps * WARMUP_FRACTION))
+        warmup = torch.optim.lr_scheduler.LinearLR(opt, start_factor=0.01, total_iters=warmup_steps)
+        decay = torch.optim.lr_scheduler.CosineAnnealingLR(
+            opt,
+            T_max=max(1, total_steps - warmup_steps),
+            eta_min=self.lr * FINAL_LR_FRACTION,
+        )
+        scheduler = torch.optim.lr_scheduler.SequentialLR(
+            opt, [warmup, decay], milestones=[warmup_steps]
+        )
         return {
             "optimizer": opt,
             "lr_scheduler": {
                 "scheduler": scheduler,
-                "interval": "epoch",
+                "interval": "step",
                 "frequency": 1,
             },
         }
